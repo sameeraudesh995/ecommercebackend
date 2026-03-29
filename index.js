@@ -42,7 +42,7 @@ app.post("/upload",upload.single('product'),(req,res)=>{
 // Schema for Creating products
 
 const Product = mongoose.model("Product",{
-    product_id:{
+    id:{
         type:Number,
         require:true,
     },
@@ -83,14 +83,14 @@ app.post('/addproduct', async (req,res)=>{
     if(products.length>0){
         let last_product_array = products.slice(-1);
         let last_product = last_product_array[0];
-        id = last_product.product_id+1;
+        id = last_product.id+1;
     }
     else{
         id=1;
     }
 
     const product = new Product({
-        product_id:id,
+        id:id,
         name:req.body.name,
         image:req.body.image,
         category:req.body.category,
@@ -106,7 +106,24 @@ app.post('/addproduct', async (req,res)=>{
     })
 })
 
-//
+// creating API  for deleting product
+
+app.post('/removeproduct', async(req,res)=>{
+    await Product.findOneAndDelete({id:req.body.id});
+    console.log("Removed")
+    res.json({
+        success:true,
+        name:req.body.name,
+    })
+})
+
+// creating API for geting all product
+
+app.get('/allproducts',async(req,res)=>{
+    let products = await Product.find({})
+    console.log("All Product Fetched")
+    res.send(products);
+})
 
 // Start server
 app.listen(port, (error) => {
