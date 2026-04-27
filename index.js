@@ -8,6 +8,10 @@ const path = require("path");
 const cors = require("cors");
 const { error, log } = require("console");
 
+require('dotenv').config();
+const token = jwt.sign(data, process.env.JWT_SECRET);
+const hashedPassword = await bcrypt.hash(password, Number(process.env.SALT_ROUNDS));
+
 app.use(express.json());
 app.use(cors());
 
@@ -154,57 +158,78 @@ const Users = mongoose.model('Users',{
 })
 
 // creating end point fir registering the user
-app.post('/signup',async(req,res)=>{
-    let check = await Users.findOne({email:req.body.email});
-    if(check){
-        return res.status(400).json({success:false,errors:"existing user found with same email address"})
+const bcrypt = require('bcrypt');
+const SALT_ROUNDS = 10;
+
+// ── Signup ──
+app.post('/signup', async (req, res) => {
+  try {
+    // check if user already exists
+    let check = await Users.findOne({ email: req.body.email });
+    if (check) {
+      return res.status(400).json({
+        success: false,
+        error: "An account with this email already exists."
+      });
     }
-    let cart ={}
-    for (let i =0; i < 300; i++) {
-        cart[i] =0;
-        
+
+    // ✅ encrypt password before saving
+    const hashedPassword = await bcrypt.hash(req.body.password, SALT_ROUNDS);
+
+    // build default cart
+    let cart = {};
+    for (let i = 0; i < 300; i++) {
+      cart[i] = 0;
     }
-    const user = Users({
-        name:req.body.username,
-        email:req.body.email,
-        password:req.body.password,
-        cartData:cart,
-    })
+
+    // create user with hashed password
+    const user = new Users({
+      name: req.body.username,
+      email: req.body.email,
+      password: hashedPassword,        // ✅ save hashed, never plain text
+      cartData: cart,
+    });
 
     await user.save();
 
-    const data ={
-        user:{
-            id:user.id
-        }
+    // generate token
+    const data = { user: { id: user.id } };
+    const token = jwt.sign(data, 'secret_ecom');
+
+    res.json({ success: true, token });
+
+  } catch (error) {
+    console.error('Signup error:', error.message);
+    res.status(500).json({ success: false, error: "Server error. Please try again." });
+  }
+});
+
+// ── Login ──
+app.post('/login', async (req, res) => {
+  try {
+    // find user by email
+    let user = await Users.findOne({ email: req.body.email });
+    if (!user) {
+      return res.json({ success: false, error: "No account found with this email." });
     }
 
-    const token = jwt.sign(data,'secret_ecom');
-    res.json({success:true,token})
-})
+    // ✅ compare entered password with hashed password in DB
+    const passCompare = await bcrypt.compare(req.body.password, user.password);
+    if (!passCompare) {
+      return res.json({ success: false, error: "Incorrect password. Please try again." });
+    }
 
-//creating endpoint for user login
-app.post('/login',async (req,res)=>{
-    let user = await Users.findOne({email:req.body.email});
-    if(user){
-        const passCompare =req.body.password === user.password;
-        if(passCompare){
-            const data = {
-                user:{
-                    id:user.id
-                }
-            }
-            const token = jwt.sign(data,'secret_ecom');
-            res.json({success:true,token})
-        }
-        else{
-            res.json({success:false, error:"Wrong Password"})
-        }
-    }
-    else{
-        res.json({success:false, error:"Wrong Email id"})
-    }
-})
+    // generate token
+    const data = { user: { id: user.id } };
+    const token = jwt.sign(data, 'secret_ecom');
+
+    res.json({ success: true, token });
+
+  } catch (error) {
+    console.error('Login error:', error.message);
+    res.status(500).json({ success: false, error: "Server error. Please try again." });
+  }
+});
 //creating endpoint for new collection
 
 app.get('/newcollections', async(req,res)=>{
@@ -216,11 +241,11 @@ app.get('/newcollections', async(req,res)=>{
 
 //creating end point popular in women category
 
-app.get('/popularinwomen', async (req, res) => {
-    let products = await Product.find({ category:"women"});
-    let popular_in_women = products.slice(0, 4);
+app.get('/popularingov', async (req, res) => {
+    let products = await Product.find({ category:"GOV"});
+    let popular_in_gov = products.slice(0, 4);
     console.log("Popular in women fetch");
-    res.send(popular_in_women);
+    res.send(popular_in_gov);
 });
 
 //creating middleware to fetch user
