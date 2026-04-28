@@ -9,8 +9,12 @@ const cors = require("cors");
 const { error, log } = require("console");
 
 require('dotenv').config();
-const token = jwt.sign(data, process.env.JWT_SECRET);
-const hashedPassword = await bcrypt.hash(password, Number(process.env.SALT_ROUNDS));
+
+async function hashPassword(password) {
+  const token = jwt.sign(data, process.env.JWT_SECRET);
+  const hashedPassword = await bcrypt.hash(password, Number(process.env.SALT_ROUNDS));
+  return hashedPassword;
+}
 
 app.use(express.json());
 app.use(cors());
@@ -239,7 +243,7 @@ app.get('/newcollections', async(req,res)=>{
     res.send(newcollection);
 })
 
-//creating end point popular in women category
+//creating end point popular in gov category
 
 app.get('/popularingov', async (req, res) => {
     let products = await Product.find({ category:"GOV"});
