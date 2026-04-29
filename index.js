@@ -310,6 +310,146 @@ app.post('/getcart', fetchUser, async (req, res) => {
   }
 });
 
+//checkout data
+
+// ── Order Schema ──
+const Order = mongoose.model("Order", {
+  userId:     { type: String, required: true },
+  items:      { type: Array,  required: true },
+  delivery:   { type: Object, required: true },
+  payment:    { type: String, default: "cod" },
+  status:     { type: String, default: "pending" },
+  totalAmount:{ type: Number, required: true },
+  createdAt:  { type: Date,   default: Date.now },
+});
+
+// ── Place Order (COD only) ──
+app.post('/placeorder', fetchUser, async (req, res) => {
+  try {
+    const { items, delivery, totalAmount } = req.body;
+
+    // validate required fields
+    if (!items || items.length === 0) {
+      return res.status(400).json({ success: false, error: "Cart is empty." });
+    }
+    if (!delivery.firstName || !delivery.email || !delivery.address) {
+      return res.status(400).json({ success: false, error: "Delivery details incomplete." });
+    }
+
+    // create order
+    const order = new Order({
+      userId:      req.user.id,
+      items,
+      delivery,
+      payment:     "cod",
+      status:      "pending",
+      totalAmount,
+    });
+
+    await order.save();
+
+    // clear user cart after order placed
+    let cartData = {};
+    for (let i = 0; i < 300; i++) cartData[i] = 0;
+    await Users.findByIdAndUpdate(req.user.id, { cartData });
+
+    res.json({ success: true, message: "Order placed successfully.", orderId: order._id });
+
+  } catch (error) {
+    console.error("Place order error:", error.message);
+    res.status(500).json({ success: false, error: "Server error. Please try again." });
+  }
+});
+
+// ── Get All Orders (Admin) ──
+app.get('/allorders', async (req, res) => {
+  try {
+    const orders = await Order.find({}).sort({ createdAt: -1 });
+    res.json({ success: true, orders });
+  } catch (error) {
+    console.error("Fetch orders error:", error.message);
+    res.status(500).json({ success: false, error: "Server error." });
+  }
+});
+
+// ── Get User Orders ──
+app.get('/myorders', fetchUser, async (req, res) => {
+  try {
+    const orders = await Order.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    res.json({ success: true, orders });
+  } catch (error) {
+    console.error("Fetch user orders error:", error.message);
+    res.status(500).json({ success: false, error: "Server error." });
+  }
+});
+
+// ── Update Order Status (Admin) ──
+app.post('/updateorder', async (req, res) => {
+  try {
+    const { orderId, status } = req.body;
+
+    const validStatuses = ["pending", "confirmed", "shipped", "delivered", "cancelled"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: "Invalid status." });
+    }
+
+    await Order.findByIdAndUpdate(orderId, { status });
+    res.json({ success: true, message: "Order status updated." });
+
+  } catch (error) {
+    console.error("Update order error:", error.message);
+    res.status(500).json({ success: false, error: "Server error." });
+  }
+});
+
+// ── Remove Order (Admin only) ──
+app.post('/removeorder', async (req, res) => {
+  try {
+    const { orderId } = req.body;
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: "Order not found." });
+    }
+
+    await Order.findByIdAndDelete(orderId);
+    res.json({ success: true, message: "Order removed successfully." });
+
+  } catch (error) {
+    console.error("Remove order error:", error.message);
+    res.status(500).json({ success: false, error: "Server error." });
+  }
+});
+
+// ── Cancel Order (User) ──
+app.post('/cancelorder', fetchUser, async (req, res) => {
+  try {
+    const { orderId } = req.body;
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, error: "Order not found." });
+    }
+
+    // only owner can cancel
+    if (order.userId !== req.user.id) {
+      return res.status(403).json({ success: false, error: "Unauthorized." });
+    }
+
+    // only pending orders can be cancelled
+    if (order.status !== "pending") {
+      return res.status(400).json({ success: false, error: `Cannot cancel a ${order.status} order.` });
+    }
+
+    await Order.findByIdAndUpdate(orderId, { status: "cancelled" });
+    res.json({ success: true, message: "Order cancelled successfully." });
+
+  } catch (error) {
+    console.error("Cancel order error:", error.message);
+    res.status(500).json({ success: false, error: "Server error." });
+  }
+});
+
 // Start server
 app.listen(port, (error) => {
     if (!error) {
