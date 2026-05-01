@@ -450,6 +450,33 @@ app.post('/cancelorder', fetchUser, async (req, res) => {
   }
 });
 
+// ── Get All Customers (Admin) ──
+app.get('/allcustomers', async (req, res) => {
+  try {
+    const customers = await Users.find({}).select('-password').sort({ date: -1 })
+    res.json({ success: true, customers })
+  } catch (error) {
+    console.error('Fetch customers error:', error.message)
+    res.status(500).json({ success: false, error: 'Server error.' })
+  }
+})
+
+// ── Delete Customer (Admin) ──
+app.post('/deletecustomer', async (req, res) => {
+  try {
+    const { id } = req.body
+    const customer = await Users.findById(id)
+    if (!customer) {
+      return res.status(404).json({ success: false, error: 'Customer not found.' })
+    }
+    await Users.findByIdAndDelete(id)
+    res.json({ success: true, message: 'Customer deleted successfully.' })
+  } catch (error) {
+    console.error('Delete customer error:', error.message)
+    res.status(500).json({ success: false, error: 'Server error.' })
+  }
+})
+
 // Start server
 app.listen(port, (error) => {
     if (!error) {
